@@ -11,6 +11,23 @@ from torch.autograd import Variable
 def cuda(tensor, uses_cuda):
     return tensor.cuda() if uses_cuda else tensor
 
+def mps(tensor, uses_mps):
+    '''
+    @Jona rebuilt cuda() function by example for metal support.
+    '''
+    return tensor.mps() if uses_mps else tensor
+
+def device(tensor, uses_cuda, uses_mps):
+    '''
+    @Jona built this funcion to replace the cuda() function in all other applications.
+    '''
+    if uses_cuda:
+        return tensor.cuda()
+    elif uses_mps:
+        return tensor.to('mps')
+    else:
+        return tensor
+
 
 def str2bool(v):
     # codes from : https://stackoverflow.com/questions/15008758/parsing-boolean-values-with-argparse

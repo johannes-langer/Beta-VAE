@@ -13,7 +13,7 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 from torchvision.utils import make_grid, save_image
 
-from utils import cuda, grid2gif
+from utils import cuda, device, grid2gif       #@Jona
 from model import BetaVAE_H, BetaVAE_B
 from dataset import return_data
 
@@ -74,6 +74,7 @@ class DataGather(object):
 class Solver(object):
     def __init__(self, args):
         self.use_cuda = args.cuda and torch.cuda.is_available()
+        self.use_mps = args.mps and torch.backends.mps.is_available()     #@Jona
         self.max_iter = args.max_iter
         self.global_iter = 0
 
@@ -107,7 +108,8 @@ class Solver(object):
         else:
             raise NotImplementedError('only support model H or B')
 
-        self.net = cuda(net(self.z_dim, self.nc), self.use_cuda)
+        # self.net = cuda(net(self.z_dim, self.nc), self.use_cuda)
+        self.net = device(net(self.z_dim, self.nc), self.use_cuda, self.use_mps)      #@Jona
         self.optim = optim.Adam(self.net.parameters(), lr=self.lr,
                                     betas=(self.beta1, self.beta2))
 
@@ -146,7 +148,8 @@ class Solver(object):
 
     def train(self):
         self.net_mode(train=True)
-        self.C_max = Variable(cuda(torch.FloatTensor([self.C_max]), self.use_cuda))
+        # self.C_max = Variable(cuda(torch.FloatTensor([self.C_max]), self.use_cuda))
+        self.C_max = Variable(device(torch.FloatTensor([self.C_max]), self.use_cuda, self.use_mps))     #@Jona
         out = False
 
         pbar = tqdm(total=self.max_iter)
@@ -156,7 +159,8 @@ class Solver(object):
                 self.global_iter += 1
                 pbar.update(1)
 
-                x = Variable(cuda(x, self.use_cuda))
+                # x = Variable(cuda(x, self.use_cuda))
+                x = Variable(device(x, self.use_cuda, self.use_mps))        #@Jona
                 x_recon, mu, logvar = self.net(x)
                 recon_loss = reconstruction_loss(x, x_recon, self.decoder_dist)
                 total_kld, dim_wise_kld, mean_kld = kl_divergence(mu, logvar)
@@ -179,7 +183,8 @@ class Solver(object):
 
                 if self.global_iter%self.display_step == 0:
                     pbar.write('[{}] recon_loss:{:.3f} total_kld:{:.3f} mean_kld:{:.3f}'.format(
-                        self.global_iter, recon_loss.data[0], total_kld.data[0], mean_kld.data[0]))
+                        # self.global_iter, recon_loss.data[0], total_kld.data[0], mean_kld.data[0]))     #@Jona: I changed this because of an error I got in Iteration 10,000
+                        self.global_iter, recon_loss.data.item(), total_kld.data.item(), mean_kld.data.item()))
 
                     var = logvar.exp().mean(0).data
                     var_str = ''
@@ -355,10 +360,12 @@ class Solver(object):
         rand_idx = random.randint(1, n_dsets-1)
 
         random_img = self.data_loader.dataset.__getitem__(rand_idx)
-        random_img = Variable(cuda(random_img, self.use_cuda), volatile=True).unsqueeze(0)
+        # random_img = Variable(cuda(random_img, self.use_cuda), volatile=True).unsqueeze(0)
+        random_img = Variable(device(random_img, self.use_cuda, self.use_mps), volatile=True).unsqueeze(0)      #@Jona
         random_img_z = encoder(random_img)[:, :self.z_dim]
 
-        random_z = Variable(cuda(torch.rand(1, self.z_dim), self.use_cuda), volatile=True)
+        # random_z = Variable(cuda(torch.rand(1, self.z_dim), self.use_cuda), volatile=True)
+        random_z = Variable(device(torch.rand(1, self.z_dim), self.use_cuda, self.use_mps), volatile=True)      #@Jona
 
         if self.dataset == 'dsprites':
             fixed_idx1 = 87040 # square
@@ -366,15 +373,18 @@ class Solver(object):
             fixed_idx3 = 578560 # heart
 
             fixed_img1 = self.data_loader.dataset.__getitem__(fixed_idx1)
-            fixed_img1 = Variable(cuda(fixed_img1, self.use_cuda), volatile=True).unsqueeze(0)
+            # fixed_img1 = Variable(cuda(fixed_img1, self.use_cuda), volatile=True).unsqueeze(0)
+            fixed_img1 = Variable(device(fixed_img1, self.use_cuda, self.use_mps), volatile=True).unsqueeze(0)      #@Jona
             fixed_img_z1 = encoder(fixed_img1)[:, :self.z_dim]
 
             fixed_img2 = self.data_loader.dataset.__getitem__(fixed_idx2)
-            fixed_img2 = Variable(cuda(fixed_img2, self.use_cuda), volatile=True).unsqueeze(0)
+            # fixed_img2 = Variable(cuda(fixed_img2, self.use_cuda), volatile=True).unsqueeze(0)
+            fixed_img2 = Variable(device(fixed_img2, self.use_cuda, self.use_mps), volatile=True).unsqueeze(0)      #@Jona
             fixed_img_z2 = encoder(fixed_img2)[:, :self.z_dim]
 
             fixed_img3 = self.data_loader.dataset.__getitem__(fixed_idx3)
-            fixed_img3 = Variable(cuda(fixed_img3, self.use_cuda), volatile=True).unsqueeze(0)
+            # fixed_img3 = Variable(cuda(fixed_img3, self.use_cuda), volatile=True).unsqueeze(0)
+            fixed_img3 = Variable(device(fixed_img3, self.use_cuda, self.use_mps), volatile=True).unsqueeze(0)      #@Jona
             fixed_img_z3 = encoder(fixed_img3)[:, :self.z_dim]
 
             Z = {'fixed_square':fixed_img_z1, 'fixed_ellipse':fixed_img_z2,
@@ -382,7 +392,8 @@ class Solver(object):
         else:
             fixed_idx = 0
             fixed_img = self.data_loader.dataset.__getitem__(fixed_idx)
-            fixed_img = Variable(cuda(fixed_img, self.use_cuda), volatile=True).unsqueeze(0)
+            # fixed_img = Variable(cuda(fixed_img, self.use_cuda), volatile=True).unsqueeze(0)
+            fixed_img = Variable(device(fixed_img, self.use_cuda, self.use_mps), volatile=True).unsqueeze(0)        #@Jona
             fixed_img_z = encoder(fixed_img)[:, :self.z_dim]
 
             Z = {'fixed_img':fixed_img_z, 'random_img':random_img_z, 'random_z':random_z}
@@ -415,7 +426,7 @@ class Solver(object):
             for i, key in enumerate(Z.keys()):
                 for j, val in enumerate(interpolation):
                     save_image(tensor=gifs[i][j].cpu(),
-                               filename=os.path.join(output_dir, '{}_{}.jpg'.format(key, j)),
+                               fp=os.path.join(output_dir, '{}_{}.jpg'.format(key, j)),     #@Jona: Changed 'filename' to 'fp', as this threw an error.s
                                nrow=self.z_dim, pad_value=1)
 
                 grid2gif(os.path.join(output_dir, key+'*.jpg'),
